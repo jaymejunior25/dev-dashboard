@@ -1,13 +1,10 @@
-// src/app/api/github/route.ts
 import { NextResponse } from 'next/server';
 
+// Colocamos o username aqui para fácil manutenção
 const GITHUB_USERNAME = 'jaymejunior25';
 
 export async function GET() {
   const token = process.env.GITHUB_TOKEN;
-
-  console.log('--- CHAMANDO A API /api/github ---');
-  console.log('O TOKEN FOI LIDO?', !!token);
 
   if (!token) {
     return NextResponse.json(
@@ -17,11 +14,13 @@ export async function GET() {
   }
 
   try {
-    // 1. Buscar os repositórios fixados (pinned)
-    const pinnedQuery = {
+    // Query única para buscar tudo (avatar, nome, repos fixados)
+    const query = {
       query: `
         query {
           user(login: "${GITHUB_USERNAME}") {
+            avatarUrl
+            name
             pinnedItems(first: 6, types: REPOSITORY) {
               nodes {
                 ... on Repository {
@@ -49,25 +48,19 @@ export async function GET() {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(pinnedQuery),
+      body: JSON.stringify(query),
       next: {
-        revalidate: 3600, // Cache
+        revalidate: 3600, // Cache de 1 hora
       },
     });
 
+    if (!resPinned.ok) throw new Error('Erro ao buscar dados do GitHub (GraphQL)');
     const pinnedData = await resPinned.json();
+    if (pinnedData.errors) throw new Error(pinnedData.errors[0].message);
 
-    // --- MELHOR DEPURAÇÃO ---
-    // Verificar se o GitHub retornou um erro de GraphQL
-    if (pinnedData.errors) {
-      console.error('ERRO DO GRAPHQL:', pinnedData.errors);
-      throw new Error('Erro ao buscar dados do GraphQL do GitHub.');
-    }
-    // -------------------------
+    const userData = pinnedData.data.user;
 
-    const pinnedRepos = pinnedData.data.user.pinnedItems.nodes;
-
-    // 2. Buscar as estatísticas de linguagem
+    // 2. Buscar as estatísticas de linguagem (API REST)
     const resRepos = await fetch(
       `https://api.github.com/users/${GITHUB_USERNAME}/repos?per_page=100&sort=pushed`,
       {
@@ -75,21 +68,14 @@ export async function GET() {
           Authorization: `Bearer ${token}`,
         },
         next: {
-          revalidate: 3600, // Cache
+          revalidate: 3600, // Cache de 1 hora
         },
       }
     );
 
+    if (!resRepos.ok) throw new Error('Erro ao buscar lista de repositórios (REST)');
     const repos = await resRepos.json();
     
-    // --- MELHOR DEPURAÇÃO ---
-    // Verificar se a API REST retornou um erro (ex: token inválido)
-    if (!resRepos.ok) {
-      console.error('ERRO DA API REST:', repos);
-      throw new Error('Erro ao buscar lista de repositórios do GitHub.');
-    }
-    // -------------------------
-
     // Processar linguagens
     const langStats: { [key: string]: { count: number; color?: string } } = {};
     for (const repo of repos) {
@@ -102,21 +88,19 @@ export async function GET() {
       }
     }
 
-    console.log('REPOSITÓRIOS FIXADOS ENCONTRADOS:', pinnedRepos.length);
-    console.log('LINGUAGENS ENCONTRADAS:', Object.keys(langStats).length);
-
     // Retornar os dados combinados
     return NextResponse.json({
-      pinnedRepos,
+      avatarUrl: userData.avatarUrl,
+      name: userData.name,
+      pinnedRepos: userData.pinnedItems.nodes,
       langStats,
     });
 
   } catch (error) {
     console.error('ERRO GERAL NA API /api/github:', error);
     return NextResponse.json(
-      { error: 'Falha ao buscar dados do GitHub' },
+      { error: (error as Error).message },
       { status: 500 }
     );
   }
-
 }

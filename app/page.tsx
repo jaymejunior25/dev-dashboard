@@ -1,223 +1,57 @@
-// src/app/page.tsx
 'use client';
 
-import useSWR from 'swr';
+import { motion } from 'framer-motion';
+import { Header } from '@/components/Header';
+import { WakaTimeWidget } from '@/components/WakaTimeWidget';
+import { PinnedReposWidget } from '@/components/PinnedReposWidget';
+import { LangStatsWidget } from '@/components/LangStatsWidget';
 
-// --- INTERFACES DO GITHUB ---
-interface Repo {
-  id: string;
-  name: string;
-  description: string;
-  url: string;
-  stargazerCount: number;
-  forkCount: number;
-  primaryLanguage: {
-    name: string;
-    color: string;
-  };
-}
-interface LangStats {
-  [key: string]: {
-    count: number;
-    color?: string;
-  };
-}
-interface GitHubData {
-  pinnedRepos: Repo[];
-  langStats: LangStats;
-}
-
-// --- INTERFACES DO WAKATIME (ATUALIZADAS) ---
-interface WakaTimeStats {
-  human_readable_total_including_other_language: string;
-  human_readable_daily_average_including_other_language: string;
-  languages: {
-    name: string;
-    percent: number;
-    text: string;
-  }[];
-}
-interface WakaTimeAllTime {
-  text: string;
-  total_seconds: number;
-}
-// Nossa nova interface combina as duas respostas da API
-interface WakaTimeData {
-  stats_7_days: WakaTimeStats;
-  stats_all_time: WakaTimeAllTime;
-}
-
-// --- FETCHER GLOBAL ---
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
-// --- COMPONENTE DE LOADING (SKELETON) ---
-function SkeletonCard({ className = "" }: { className?: string }) {
-  return (
-    <div className={`p-4 bg-gray-800 rounded-lg animate-pulse ${className}`}>
-      <div className="h-6 bg-gray-700 rounded w-1/2 mb-4"></div>
-      <div className="space-y-2">
-        <div className="h-4 bg-gray-700 rounded w-full"></div>
-        <div className="h-4 bg-gray-700 rounded w-5/6"></div>
-      </div>
-    </div>
-  );
-}
-
-// --- WIDGET DO GITHUB ---
-function GithubWidget() {
-  const { data, error, isLoading } = useSWR<GitHubData>('/api/github', fetcher);
-
-  if (isLoading) return <SkeletonCard className="md:col-span-2" />;
-  if (error) return <div className="p-4 bg-red-900 rounded-lg">Erro ao carregar dados do GitHub.</div>;
-  if (!data) return null;
-
-  return (
-    <>
-      <section>
-        <h2 className="text-2xl font-semibold mb-4 text-white">Repositórios Fixados</h2>
-        <div className="grid grid-cols-1 gap-4">
-          {data.pinnedRepos.map((repo) => (
-            <a
-              key={repo.id}
-              href={repo.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <h3 className="font-bold text-lg text-blue-400">{repo.name}</h3>
-              <p className="text-sm text-gray-400 mb-2">{repo.description}</p>
-              <div className="flex items-center gap-4 text-sm text-gray-300">
-                {repo.primaryLanguage && (
-                  <span className="flex items-center">
-                    <span
-                      className="w-3 h-3 rounded-full mr-1.5"
-                      style={{ backgroundColor: repo.primaryLanguage.color }}
-                    />
-                    {repo.primaryLanguage.name}
-                  </span>
-                )}
-                <span>⭐ {repo.stargazerCount}</span>
-                <span>🍴 {repo.forkCount}</span>
-              </div>
-            </a>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-2xl font-semibold mb-4 text-white">Estatísticas de Linguagens</h2>
-        <div className="p-4 bg-gray-800 rounded-lg">
-          <ul className="space-y-2">
-            {Object.entries(data.langStats)
-              .sort(([, a], [, b]) => b.count - a.count)
-              .map(([lang, { count, color }]) => (
-                <li key={lang} className="flex items-center justify-between text-gray-300">
-                  <span className="flex items-center">
-                    <span
-                      className="w-3 h-3 rounded-full mr-2"
-                      style={{ backgroundColor: color || '#ccc' }}
-                    />
-                    {lang}
-                  </span>
-                  <span className="font-mono bg-gray-700 px-2 py-0.5 rounded text-sm text-white">
-                    {count} {count > 1 ? 'repos' : 'repo'}
-                  </span>
-                </li>
-              ))}
-          </ul>
-        </div>
-      </section>
-    </>
-  );
-}
-
-// --- WIDGET DO WAKATIME (ATUALIZADO) ---
-function WakaTimeWidget() {
-  const { data, error, isLoading } = useSWR<WakaTimeData>('/api/wakatime', fetcher);
-
-  if (isLoading) return <SkeletonCard />;
-  if (error) return <div className="p-4 bg-red-900 rounded-lg">Erro ao carregar dados do WakaTime.</div>;
-  // Atualizamos a verificação para checar os novos dados aninhados
-  if (!data || !data.stats_7_days || !data.stats_all_time) return (
-    <div className="p-4 bg-gray-800 rounded-lg">
-      <h2 className="text-2xl font-semibold mb-4 text-white">Atividade de Codificação</h2>
-      <p className="text-gray-400">Ainda sem dados de codificação. Verifique as configurações do WakaTime.</p>
-    </div>
-  );
-
-  // Desestruturamos os dados para ficar mais fácil de ler
-  const { stats_7_days, stats_all_time } = data;
-
-  return (
-    <section>
-      <h2 className="text-2xl font-semibold mb-4 text-white">Atividade de Codificação</h2>
-      <div className="p-4 bg-gray-800 rounded-lg">
-        {/* Estatísticas Principais (Layout atualizado para 3 colunas) */}
-        <div className="grid grid-cols-3 gap-4 mb-6 text-center">
-          <div>
-            <div className="text-sm text-gray-400">Total (Geral)</div>
-            <div className="text-xl font-bold text-white">
-              {stats_all_time.text}
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-400">Total (7 dias)</div>
-            <div className="text-xl font-bold text-white">
-              {stats_7_days.human_readable_total_including_other_language}
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-gray-400">Média (7 dias)</div>
-            <div className="text-xl font-bold text-white">
-              {stats_7_days.human_readable_daily_average_including_other_language}
-            </div>
-          </div>
-        </div>
-        
-        {/* Linguagens */}
-        <h3 className="text-lg font-semibold mb-2 text-white">Linguagens (Últimos 7 dias)</h3>
-        <ul className="space-y-2">
-          {stats_7_days.languages.slice(0, 5).map((lang) => (
-            <li key={lang.name} className="text-gray-300">
-              <div className="flex justify-between text-sm mb-1">
-                <span>{lang.name}</span>
-                <span>{lang.text} ({lang.percent}%)</span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-1.5">
-                <div
-                  className="bg-blue-500 h-1.5 rounded-full"
-                  style={{ width: `${lang.percent}%` }}
-                ></div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-// --- PÁGINA PRINCIPAL ---
 export default function Home() {
+  // Variantes para animar o container do grid
+  const gridContainerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        delay: 0.1, // Atraso para animar após o header
+        staggerChildren: 0.15, // Anima widgets um após o outro
+      },
+    },
+  };
+
+  // Variantes para animar os widgets individuais
+  const gridItemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+  };
+
   return (
-    <main className="p-8 bg-gray-900 min-h-screen">
-      <h1 className="text-4xl font-bold mb-8 text-white">Dev-Dashboard</h1>
+    // Fundo é definido no layout.tsx
+    <div className="min-h-screen">
+      <Header />
 
-      {/* Layout atualizado para 3 colunas em telas grandes */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Coluna 1: Atividade */}
-        <div className="space-y-8">
-          <WakaTimeWidget />
-          {/* O BlogWidget viria aqui se estivéssemos usando */}
+      <motion.main 
+        className="max-w-7xl mx-auto p-6 lg:p-8"
+        variants={gridContainerVariants}
+        initial="hidden"
+        animate="show"
+      >
+        {/* Layout de 3 colunas em telas grandes */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Coluna da Esquerda (1/3) */}
+          <motion.div className="lg:col-span-1 space-y-6" variants={gridItemVariants}>
+            <WakaTimeWidget />
+            <LangStatsWidget />
+          </motion.div>
+
+          {/* Coluna da Direita (2/3) */}
+          <motion.div className="lg:col-span-2" variants={gridItemVariants}>
+            <PinnedReposWidget />
+          </motion.div>
+
         </div>
-
-        {/* Coluna 2 e 3: GitHub (ocupando 2 colunas) */}
-        <div className="lg:col-span-2 space-y-8">
-          <GithubWidget />
-        </div>
-
-      </div>
-    </main>
+      </motion.main>
+    </div>
   );
 }

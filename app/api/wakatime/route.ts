@@ -1,4 +1,3 @@
-// src/app/api/wakatime/route.ts
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -17,7 +16,7 @@ export async function GET() {
       Authorization: `Basic ${auth}`,
     };
     
-    // Vamos buscar DOIS endpoints ao mesmo tempo
+    // Buscamos os DOIS endpoints ao mesmo tempo
     const [res7Days, resAllTime] = await Promise.all([
       // Endpoint 1: Últimos 7 dias
       fetch(
@@ -31,7 +30,6 @@ export async function GET() {
       ),
     ]);
 
-    // Tratar erros de ambas as requisições
     if (!res7Days.ok || !resAllTime.ok) {
       console.error('Falha ao buscar dados do WakaTime');
       throw new Error('Falha ao buscar dados do WakaTime');
@@ -40,7 +38,7 @@ export async function GET() {
     const data7Days = await res7Days.json();
     const dataAllTime = await resAllTime.json();
 
-    // Retornamos um objeto combinado com as duas respostas
+    // Retornamos um objeto combinado
     return NextResponse.json({
       stats_7_days: data7Days.data,
       stats_all_time: dataAllTime.data,
