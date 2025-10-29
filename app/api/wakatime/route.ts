@@ -12,32 +12,39 @@ export async function GET() {
   }
 
   try {
-    // A API do WakaTime usa autenticação "Basic" com a chave da API em Base64
     const auth = Buffer.from(apiKey).toString('base64');
+    const headers = {
+      Authorization: `Basic ${auth}`,
+    };
+    
+    // Vamos buscar DOIS endpoints ao mesmo tempo
+    const [res7Days, resAllTime] = await Promise.all([
+      // Endpoint 1: Últimos 7 dias
+      fetch(
+        'https://wakatime.com/api/v1/users/current/stats/last_7_days',
+        { headers, next: { revalidate: 3600 } } // Cache de 1 hora
+      ),
+      // Endpoint 2: Tempo total
+      fetch(
+        'https://wakatime.com/api/v1/users/current/all_time_since_today',
+        { headers, next: { revalidate: 3600 } } // Cache de 1 hora
+      ),
+    ]);
 
-    // Buscamos as estatísticas dos últimos 7 dias
-    const res = await fetch(
-      'https://wakatime.com/api/v1/users/current/stats/last_7_days',
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-        },
-        next: {
-          revalidate: 3600, // Cache de 1 hora
-        },
-      }
-    );
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error('Erro do WakaTime:', errorText);
-      throw new Error(`Erro ao buscar dados do WakaTime: ${res.statusText}`);
+    // Tratar erros de ambas as requisições
+    if (!res7Days.ok || !resAllTime.ok) {
+      console.error('Falha ao buscar dados do WakaTime');
+      throw new Error('Falha ao buscar dados do WakaTime');
     }
 
-    const data = await res.json();
+    const data7Days = await res7Days.json();
+    const dataAllTime = await resAllTime.json();
 
-    // A resposta do WakaTime vem dentro de um objeto "data"
-    return NextResponse.json(data.data);
+    // Retornamos um objeto combinado com as duas respostas
+    return NextResponse.json({
+      stats_7_days: data7Days.data,
+      stats_all_time: dataAllTime.data,
+    });
 
   } catch (error) {
     console.error(error);

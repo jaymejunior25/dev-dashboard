@@ -27,8 +27,8 @@ interface GitHubData {
   langStats: LangStats;
 }
 
-// --- INTERFACES DO WAKATIME (SIMPLIFICADAS) ---
-interface WakaTimeData {
+// --- INTERFACES DO WAKATIME (ATUALIZADAS) ---
+interface WakaTimeStats {
   human_readable_total_including_other_language: string;
   human_readable_daily_average_including_other_language: string;
   languages: {
@@ -37,15 +37,23 @@ interface WakaTimeData {
     text: string;
   }[];
 }
+interface WakaTimeAllTime {
+  text: string;
+  total_seconds: number;
+}
+// Nossa nova interface combina as duas respostas da API
+interface WakaTimeData {
+  stats_7_days: WakaTimeStats;
+  stats_all_time: WakaTimeAllTime;
+}
 
 // --- FETCHER GLOBAL ---
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // --- COMPONENTE DE LOADING (SKELETON) ---
-// Um componente simples para usar enquanto os dados carregam
-function SkeletonCard() {
+function SkeletonCard({ className = "" }: { className?: string }) {
   return (
-    <div className="p-4 bg-gray-800 rounded-lg animate-pulse">
+    <div className={`p-4 bg-gray-800 rounded-lg animate-pulse ${className}`}>
       <div className="h-6 bg-gray-700 rounded w-1/2 mb-4"></div>
       <div className="space-y-2">
         <div className="h-4 bg-gray-700 rounded w-full"></div>
@@ -59,13 +67,12 @@ function SkeletonCard() {
 function GithubWidget() {
   const { data, error, isLoading } = useSWR<GitHubData>('/api/github', fetcher);
 
-  if (isLoading) return <SkeletonCard />;
+  if (isLoading) return <SkeletonCard className="md:col-span-2" />;
   if (error) return <div className="p-4 bg-red-900 rounded-lg">Erro ao carregar dados do GitHub.</div>;
   if (!data) return null;
 
   return (
     <>
-      {/* Seção 1: Repositórios Fixados */}
       <section>
         <h2 className="text-2xl font-semibold mb-4 text-white">Repositórios Fixados</h2>
         <div className="grid grid-cols-1 gap-4">
@@ -97,7 +104,6 @@ function GithubWidget() {
         </div>
       </section>
 
-      {/* Seção 2: Estatísticas de Linguagem */}
       <section>
         <h2 className="text-2xl font-semibold mb-4 text-white">Estatísticas de Linguagens</h2>
         <div className="p-4 bg-gray-800 rounded-lg">
@@ -125,38 +131,53 @@ function GithubWidget() {
   );
 }
 
-// --- WIDGET DO WAKATIME ---
+// --- WIDGET DO WAKATIME (ATUALIZADO) ---
 function WakaTimeWidget() {
   const { data, error, isLoading } = useSWR<WakaTimeData>('/api/wakatime', fetcher);
 
   if (isLoading) return <SkeletonCard />;
   if (error) return <div className="p-4 bg-red-900 rounded-lg">Erro ao carregar dados do WakaTime.</div>;
-  if (!data) return null;
+  // Atualizamos a verificação para checar os novos dados aninhados
+  if (!data || !data.stats_7_days || !data.stats_all_time) return (
+    <div className="p-4 bg-gray-800 rounded-lg">
+      <h2 className="text-2xl font-semibold mb-4 text-white">Atividade de Codificação</h2>
+      <p className="text-gray-400">Ainda sem dados de codificação. Verifique as configurações do WakaTime.</p>
+    </div>
+  );
+
+  // Desestruturamos os dados para ficar mais fácil de ler
+  const { stats_7_days, stats_all_time } = data;
 
   return (
     <section>
-      <h2 className="text-2xl font-semibold mb-4 text-white">Atividade (Últimos 7 dias)</h2>
+      <h2 className="text-2xl font-semibold mb-4 text-white">Atividade de Codificação</h2>
       <div className="p-4 bg-gray-800 rounded-lg">
-        {/* Estatísticas Principais */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="text-center">
-            <div className="text-sm text-gray-400">Total</div>
-            <div className="text-2xl font-bold text-white">
-              {data.human_readable_total_including_other_language}
+        {/* Estatísticas Principais (Layout atualizado para 3 colunas) */}
+        <div className="grid grid-cols-3 gap-4 mb-6 text-center">
+          <div>
+            <div className="text-sm text-gray-400">Total (Geral)</div>
+            <div className="text-xl font-bold text-white">
+              {stats_all_time.text}
             </div>
           </div>
-          <div className="text-center">
-            <div className="text-sm text-gray-400">Média Diária</div>
-            <div className="text-2xl font-bold text-white">
-              {data.human_readable_daily_average_including_other_language}
+          <div>
+            <div className="text-sm text-gray-400">Total (7 dias)</div>
+            <div className="text-xl font-bold text-white">
+              {stats_7_days.human_readable_total_including_other_language}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-400">Média (7 dias)</div>
+            <div className="text-xl font-bold text-white">
+              {stats_7_days.human_readable_daily_average_including_other_language}
             </div>
           </div>
         </div>
         
         {/* Linguagens */}
-        <h3 className="text-lg font-semibold mb-2 text-white">Linguagens</h3>
+        <h3 className="text-lg font-semibold mb-2 text-white">Linguagens (Últimos 7 dias)</h3>
         <ul className="space-y-2">
-          {data.languages.slice(0, 5).map((lang) => ( // Mostra as 5+ usadas
+          {stats_7_days.languages.slice(0, 5).map((lang) => (
             <li key={lang.name} className="text-gray-300">
               <div className="flex justify-between text-sm mb-1">
                 <span>{lang.name}</span>
@@ -176,22 +197,23 @@ function WakaTimeWidget() {
   );
 }
 
-
 // --- PÁGINA PRINCIPAL ---
 export default function Home() {
   return (
     <main className="p-8 bg-gray-900 min-h-screen">
       <h1 className="text-4xl font-bold mb-8 text-white">Dev-Dashboard</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* Layout atualizado para 3 colunas em telas grandes */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Coluna 1: WakaTime */}
+        {/* Coluna 1: Atividade */}
         <div className="space-y-8">
           <WakaTimeWidget />
+          {/* O BlogWidget viria aqui se estivéssemos usando */}
         </div>
 
-        {/* Coluna 2: GitHub */}
-        <div className="space-y-8">
+        {/* Coluna 2 e 3: GitHub (ocupando 2 colunas) */}
+        <div className="lg:col-span-2 space-y-8">
           <GithubWidget />
         </div>
 
